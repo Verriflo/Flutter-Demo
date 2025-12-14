@@ -1,0 +1,25 @@
+name: demo_app
+description: "Demo app to test Verriflo Classroom SDK"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.0
+  
+  # Local reference to verriflo_classroom SDK
+  verriflo_classroom:
+    path: ../verriflo_classroom
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
