@@ -666,7 +666,7 @@ packages:
     description:
       path: "."
       ref: HEAD
-      resolved-ref: "15b61e241134a5f4f462b787335d6a055901baa0"
+      resolved-ref: "9751f6d460f9dfff982e347086c01848c7a34862"
       url: "https://github.com/Verriflo/Flutter-SDK.git"
     source: git
     version: "1.0.0"

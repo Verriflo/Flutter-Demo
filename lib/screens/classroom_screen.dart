@@ -17,9 +17,9 @@ import '../widgets/classroom_tabs.dart';
  * The VerrifloPlayer widget handles all video streaming via WebView.
  */
 class ClassroomScreen extends StatefulWidget {
-  final String joinUrl;
+  final String token;
 
-  const ClassroomScreen({super.key, required this.joinUrl});
+  const ClassroomScreen({super.key, required this.token});
 
   @override
   State<ClassroomScreen> createState() => _ClassroomScreenState();
@@ -259,7 +259,7 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
           height: playerHeight,
           child: VerrifloPlayer(
             key: _playerKey,
-            joinUrl: widget.joinUrl,
+            token: widget.token,
             backgroundColor: Colors.black,
             isFullscreen: _isFullscreen,
             onFullscreenToggle: _toggleFullscreen,

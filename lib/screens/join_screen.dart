@@ -70,10 +70,10 @@ class _JoinScreenState extends State<JoinScreen> {
 
       if (!mounted) return;
 
-      if (result.success && result.joinUrl != null) {
+      if (result.success && result.token != null) {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ClassroomScreen(joinUrl: result.joinUrl!),
+            builder: (_) => ClassroomScreen(token: result.token!),
           ),
         );
       } else {

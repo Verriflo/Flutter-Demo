@@ -70,7 +70,7 @@ final response = await http.post(
 );
 
 final data = jsonDecode(response.body)['data'];
-final joinUrl = 'https://live.verriflo.com/sdk/live?token=${data['livekitToken']}';
+final joinUrl = 'https://live.verriflo.com/sdk/live?token=${data['streamToken']}';
 ```
 
 ### Player Integration

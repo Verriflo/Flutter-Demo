@@ -50,16 +50,13 @@ class ApiService {
         return JoinResult.error(message);
       }
 
-      // Extract token and build join URL
-      final token = data['data']?['livekitToken'];
+      // Extract token
+      final token = data['data']?['streamToken'];
       if (token == null) {
         return JoinResult.error('Invalid response: missing token');
       }
 
-      const liveBaseUrl = 'https://live.verriflo.com';
-      final joinUrl = '$liveBaseUrl/sdk/live?token=$token';
-
-      return JoinResult.success(joinUrl);
+      return JoinResult.success(token);
     } on FormatException {
       return JoinResult.error('Invalid response format');
     } catch (e) {
@@ -74,17 +71,17 @@ class ApiService {
  */
 class JoinResult {
   final bool success;
-  final String? joinUrl;
+  final String? token;
   final String? error;
 
   JoinResult._({
     required this.success,
-    this.joinUrl,
+    this.token,
     this.error,
   });
 
-  factory JoinResult.success(String joinUrl) {
-    return JoinResult._(success: true, joinUrl: joinUrl);
+  factory JoinResult.success(String token) {
+    return JoinResult._(success: true, token: token);
   }
 
   factory JoinResult.error(String message) {
