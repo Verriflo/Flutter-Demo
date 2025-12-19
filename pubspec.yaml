@@ -1,5 +1,5 @@
-name: demo_app
-description: "Demo app to test Verriflo Classroom SDK"
+name: verriflo_classroom_demo
+description: "Verriflo Classroom SDK demonstration app"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -12,14 +12,39 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.2.0
   
-  # Local reference to verriflo_classroom SDK
+  # Verriflo Classroom SDK
   verriflo_classroom:
-    path: ../verriflo_classroom
+    git:
+      url: https://github.com/Verriflo/Flutter-SDK.git
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.3.10
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+
+flutter_native_splash:
+  color: "#000000"
+  image: "assets/logo.png"
+  branding: "assets/logo.png"
+  color_dark: "#000000"
+  image_dark: "assets/logo.png"
+  branding_dark: "assets/logo.png"
+
+  android_12:
+    image: "assets/logo.png"
+    icon_background_color: "#000000"
+    image_dark: "assets/logo.png"
+    icon_background_color_dark: "#000000"
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/

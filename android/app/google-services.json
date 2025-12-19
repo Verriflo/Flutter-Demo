@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "507465180294",
+    "project_id": "verriflo",
+    "storage_bucket": "verriflo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:507465180294:android:2bc2e5cd7195b6f63a9d07",
+        "android_client_info": {
+          "package_name": "com.verriflo.flutterdemo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaYvtcuatUW7kGgAtszRP-W7mwL8GOCjs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
