@@ -1,6 +1,6 @@
 name: verriflo_classroom_demo
 description: "Verriflo Classroom SDK demonstration app"
-publish_to: 'none'
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
@@ -11,12 +11,12 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.2.0
-  
+
   # Verriflo Classroom SDK
   verriflo_classroom:
     git:
       url: https://github.com/Verriflo/Flutter-SDK.git
-  share_plus: ^6.3.1
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
