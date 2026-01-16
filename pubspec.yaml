@@ -16,6 +16,7 @@ dependencies:
   verriflo_classroom:
     git:
       url: https://github.com/Verriflo/Flutter-SDK.git
+  share_plus: ^6.3.1
 
 dev_dependencies:
   flutter_test:

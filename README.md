@@ -48,36 +48,31 @@ flutter run
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
-1. User enters room ID, name, and email
+1. User enters room ID, name, and UID
 2. App calls Verriflo API to get streaming token
-3. `VerrifloPlayer` connects using the token
+3. `VerrifloPlayer` connects using the provided iframe URL
 
 ### API Integration
 
 ```dart
-// Call your backend's SDK join endpoint
-final response = await http.post(
-  Uri.parse('https://api.verriflo.com/v1/live/sdk/join'),
-  headers: {
-    'Content-Type': 'application/json',
-    'VF-ORG-ID': 'your-org-id',
-  },
-  body: jsonEncode({
-    'roomId': 'class-101',
-    'name': 'Student Name',
-    'email': 'student@example.com',
-  }),
+// Use VerrifloClient to join or create rooms
+final response = await client.joinRoom(
+  'math-101',
+  JoinRoomRequest(
+    participant: Participant(
+      uid: 'user-123',
+      name: 'John Doe',
+      role: ParticipantRole.student,
+    ),
+  ),
 );
-
-final data = jsonDecode(response.body)['data'];
-final joinUrl = 'https://live.verriflo.com/sdk/live?token=${data['streamToken']}';
 ```
 
 ### Player Integration
 
 ```dart
 VerrifloPlayer(
-  joinUrl: joinUrl,
+  iframeUrl: response.iframeUrl,
   onClassEnded: () {
     Navigator.pop(context);
   },
@@ -112,20 +107,20 @@ demo_app/
 ├── ios/
 │   └── Runner/
 │       └── Info.plist               # Permissions
-└── pubspec.yaml
+|── pubspec.yaml
 ```
 
 ## Configuration
 
 ### Form Fields
 
-| Field | Description |
-|-------|-------------|
-| **API URL** | Your Verriflo API endpoint |
-| **Organization ID** | VF-ORG-ID header value |
-| **Room ID** | Classroom identifier |
-| **Name** | Display name in class |
-| **Email** | Student email |
+| Field               | Description                |
+| ------------------- | -------------------------- |
+| **API URL**         | Your Verriflo API endpoint |
+| **Organization ID** | VF-ORG-ID header value     |
+| **Room ID**         | Classroom identifier       |
+| **Name**            | Display name in class      |
+| **User ID (UID)**   | Unique identifier for user |
 
 ### Events
 
@@ -166,14 +161,17 @@ This demo is designed to be forked and customized:
 ## Troubleshooting
 
 **Video not loading**
+
 - Check network permissions in AndroidManifest.xml
 - Verify the teacher has started the class
 
 **"Room not found" error**
+
 - The classroom doesn't exist yet
 - Teacher needs to start the class first
 
 **iOS build fails**
+
 - Open `ios/Runner.xcworkspace` in Xcode
 - Select a Development Team under Signing
 

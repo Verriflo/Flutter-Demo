@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:verriflo_classroom/verriflo_classroom.dart';
 
 import '../services/api_service.dart';
 import '../widgets/gradient_button.dart';
 import 'classroom_screen.dart';
 
 /*
- * Join Screen
+ * Join/Create Screen
  * 
- * Collects session configuration from user:
- * - Organization ID (from your dashboard)
- * - Room ID (the classroom identifier)
- * - Participant name and email
- * - API URL (for testing against different environments)
- * 
- * Validates input before attempting API call to get token.
+ * New tabbed interface to either join an existing room or create a new one.
+ * Includes comprehensive customization options for room creation.
  */
 class JoinScreen extends StatefulWidget {
   const JoinScreen({super.key});
@@ -22,32 +18,77 @@ class JoinScreen extends StatefulWidget {
   State<JoinScreen> createState() => _JoinScreenState();
 }
 
-class _JoinScreenState extends State<JoinScreen> {
-  // Form controllers
-  final _apiUrlController = TextEditingController(text: 'https://api.verriflo.com');
+class _JoinScreenState extends State<JoinScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  // Common controllers
+  final _apiUrlController =
+      TextEditingController(text: 'https://api.verriflo.com');
   final _orgIdController = TextEditingController();
   final _roomIdController = TextEditingController();
   final _nameController = TextEditingController(text: 'Test User');
-  final _emailController = TextEditingController(text: 'test@example.com');
+  final _uidController = TextEditingController(text: 'user-123');
+
+  // Create-specific controllers
+  final _titleController = TextEditingController();
 
   bool _isLoading = false;
 
+  // Customization state
+  bool _showLobby = true;
+  bool _showClassTitle = true;
+  bool _showLogo = true;
+  bool _showHeader = true;
+  bool _showParticipantName = true;
+  bool _showMicIndicator = true;
+  bool _needChat = true;
+  bool _needControlbar = true;
+  bool _allowScreenShare = true;
+  bool _allowHandRaise = true;
+  bool _allowRecording = true;
+  bool _allowIngress = false;
+  final bool _validateDomain = true;
+  ClassroomTheme _theme = ClassroomTheme.system;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
   @override
   void dispose() {
+    _tabController.dispose();
     _apiUrlController.dispose();
     _orgIdController.dispose();
     _roomIdController.dispose();
     _nameController.dispose();
-    _emailController.dispose();
+    _uidController.dispose();
+    _titleController.dispose();
     super.dispose();
   }
 
-  /*
-   * Attempts to join the classroom using provided credentials.
-   * On success, navigates to the ClassroomScreen with the join URL.
-   */
-  Future<void> _handleJoin() async {
-    // Validate required fields
+  Customization _buildCustomization() {
+    return Customization(
+      showLobby: _showLobby,
+      showClassTitle: _showClassTitle,
+      showLogo: _showLogo,
+      showHeader: _showHeader,
+      showParticipantName: _showParticipantName,
+      showMicIndicator: _showMicIndicator,
+      needChat: _needChat,
+      needControlbar: _needControlbar,
+      allowScreenShare: _allowScreenShare,
+      allowHandRaise: _allowHandRaise,
+      allowRecording: _allowRecording,
+      allowIngress: _allowIngress,
+      validateDomain: _validateDomain,
+      theme: _theme,
+    );
+  }
+
+  Future<void> _handleSubmit() async {
     if (_orgIdController.text.trim().isEmpty) {
       _showError('Organization ID is required');
       return;
@@ -60,24 +101,49 @@ class _JoinScreenState extends State<JoinScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await ApiService.joinClassroom(
-        apiUrl: _apiUrlController.text.trim(),
-        orgId: _orgIdController.text.trim(),
-        roomId: _roomIdController.text.trim(),
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-      );
+      final isCreate = _tabController.index == 1;
+      JoinResult result;
+
+      if (isCreate) {
+        if (_titleController.text.trim().isEmpty) {
+          _showError('Class Title is required for creation');
+          setState(() => _isLoading = false);
+          return;
+        }
+        result = await ApiService.createClassroom(
+          apiUrl: _apiUrlController.text.trim(),
+          orgId: _orgIdController.text.trim(),
+          roomId: _roomIdController.text.trim(),
+          title: _titleController.text.trim(),
+          name: _nameController.text.trim(),
+          uid: _uidController.text.trim(),
+          customization: _buildCustomization(),
+        );
+      } else {
+        result = await ApiService.joinClassroom(
+          apiUrl: _apiUrlController.text.trim(),
+          orgId: _orgIdController.text.trim(),
+          roomId: _roomIdController.text.trim(),
+          name: _nameController.text.trim(),
+          uid: _uidController.text.trim(),
+          customization: _buildCustomization(),
+        );
+      }
 
       if (!mounted) return;
 
-      if (result.success && result.token != null) {
+      if (result.success && result.iframeUrl != null) {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ClassroomScreen(token: result.token!),
+            builder: (_) => ClassroomScreen(
+              iframeUrl: result.iframeUrl!,
+              roomId: _roomIdController.text.trim(),
+              orgId: _orgIdController.text.trim(),
+            ),
           ),
         );
       } else {
-        _showError(result.error ?? 'Failed to join classroom');
+        _showError(result.error ?? 'Request failed');
       }
     } catch (e) {
       if (mounted) _showError('Connection error: $e');
@@ -86,9 +152,6 @@ class _JoinScreenState extends State<JoinScreen> {
     }
   }
 
-  /*
-   * Displays error message in a top-positioned snackbar.
-   */
   void _showError(String message) {
     _showTopSnackBar(message, isError: true);
   }
@@ -112,139 +175,181 @@ class _JoinScreenState extends State<JoinScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Join Session', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: const Text('Verriflo Classroom',
+            style: TextStyle(fontWeight: FontWeight.w600)),
         backgroundColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: const Color(0xFF6B48FF),
+          tabs: const [
+            Tab(text: 'Join Class'),
+            Tab(text: 'Create Class'),
+          ],
+        ),
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth > 600;
-            final horizontalPadding = isWide ? constraints.maxWidth * 0.15 : 20.0;
-
-            return SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Basic Configuration
+              _buildFormSection(
+                title: 'Basic Configuration',
+                icon: Icons.settings_input_component,
                 children: [
-                  const SizedBox(height: 16),
-
-                  // Session details section
-                  _buildFormCard(
-                    title: 'Session Details',
-                    icon: Icons.meeting_room_outlined,
-                    children: [
-                      _buildTextField(
-                        label: 'Organization ID',
-                        controller: _orgIdController,
-                        icon: Icons.business_outlined,
-                        hint: 'Enter your org ID',
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                        label: 'Room ID',
-                        controller: _roomIdController,
-                        icon: Icons.tag,
-                        hint: 'Enter room ID',
-                      ),
-                    ],
+                  _buildTextField(
+                    label: 'Organization ID',
+                    controller: _orgIdController,
+                    icon: Icons.business,
+                    hint: 'Your Org ID',
                   ),
-
-                  const SizedBox(height: 20),
-
-                  // Participant info section
-                  _buildFormCard(
-                    title: 'Participant Info',
-                    icon: Icons.person_outline,
-                    children: [
-                      _buildTextField(
-                        label: 'Display Name',
-                        controller: _nameController,
-                        icon: Icons.badge_outlined,
-                        hint: 'Your name',
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                        label: 'Email Address',
-                        controller: _emailController,
-                        icon: Icons.email_outlined,
-                        hint: 'your@email.com',
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    label: 'Room ID',
+                    controller: _roomIdController,
+                    icon: Icons.tag,
+                    hint: 'math-101',
                   ),
-
-                  const SizedBox(height: 20),
-
-                  // Advanced settings
-                  _buildFormCard(
-                    title: 'Advanced Settings',
-                    icon: Icons.settings_outlined,
-                    children: [
-                      _buildTextField(
-                        label: 'API URL',
-                        controller: _apiUrlController,
-                        icon: Icons.link,
-                        hint: 'https://api.verriflo.com',
-                      ),
-                    ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    child: _tabController.index == 1
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: _buildTextField(
+                              label: 'Class Title',
+                              controller: _titleController,
+                              icon: Icons.title,
+                              hint: 'Mathematics 101',
+                            ),
+                          )
+                        : const SizedBox.shrink(),
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // Submit button
-                  GradientButton(
-                    text: 'Join Classroom',
-                    icon: Icons.login_rounded,
-                    isLoading: _isLoading,
-                    onPressed: _handleJoin,
-                  ),
-
-                  const SizedBox(height: 24),
                 ],
               ),
-            );
-          },
+              const SizedBox(height: 16),
+
+              // Participant Profile
+              _buildFormSection(
+                title: 'Your Profile',
+                icon: Icons.person,
+                children: [
+                  _buildTextField(
+                    label: 'Display Name',
+                    controller: _nameController,
+                    icon: Icons.badge,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    label: 'User ID (UID)',
+                    controller: _uidController,
+                    icon: Icons.fingerprint,
+                    hint: 'user-123',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // UI Customization
+              _buildFormSection(
+                title: 'UI Customization',
+                icon: Icons.tune,
+                children: [
+                  _buildThemeDropdown(),
+                  const Divider(color: Colors.white12, height: 24),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildToggle('Lobby', _showLobby,
+                          (v) => setState(() => _showLobby = v)),
+                      _buildToggle('Title', _showClassTitle,
+                          (v) => setState(() => _showClassTitle = v)),
+                      _buildToggle('Logo', _showLogo,
+                          (v) => setState(() => _showLogo = v)),
+                      _buildToggle('Header', _showHeader,
+                          (v) => setState(() => _showHeader = v)),
+                      _buildToggle('Names', _showParticipantName,
+                          (v) => setState(() => _showParticipantName = v)),
+                      _buildToggle('Mic Icon', _showMicIndicator,
+                          (v) => setState(() => _showMicIndicator = v)),
+                      _buildToggle('Chat', _needChat,
+                          (v) => setState(() => _needChat = v)),
+                      _buildToggle('Controls', _needControlbar,
+                          (v) => setState(() => _needControlbar = v)),
+                      _buildToggle('Screen Share', _allowScreenShare,
+                          (v) => setState(() => _allowScreenShare = v)),
+                      _buildToggle('Hand Raise', _allowHandRaise,
+                          (v) => setState(() => _allowHandRaise = v)),
+                      _buildToggle('Recording', _allowRecording,
+                          (v) => setState(() => _allowRecording = v)),
+                      _buildToggle('Ingress', _allowIngress,
+                          (v) => setState(() => _allowIngress = v)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Advanced
+              _buildFormSection(
+                title: 'Environment',
+                icon: Icons.dns,
+                children: [
+                  _buildTextField(
+                    label: 'API URL',
+                    controller: _apiUrlController,
+                    icon: Icons.link,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              GradientButton(
+                text: _tabController.index == 0
+                    ? 'Join as Student'
+                    : 'Create as Teacher',
+                icon: Icons.rocket_launch,
+                isLoading: _isLoading,
+                onPressed: _handleSubmit,
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildFormCard({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
+  Widget _buildFormSection(
+      {required String title,
+      required IconData icon,
+      required List<Widget> children}) {
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
-      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: const Color(0xFF6B48FF), size: 20),
-              const SizedBox(width: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Icon(icon, color: const Color(0xFF6B48FF), size: 18),
+              const SizedBox(width: 8),
+              Text(title,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           ...children,
         ],
       ),
@@ -261,45 +366,64 @@ class _JoinScreenState extends State<JoinScreen> {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white, fontSize: 15),
-      cursorColor: const Color(0xFF6B48FF),
+      style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
-        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-        prefixIcon: Icon(icon, color: Colors.white.withValues(alpha: 0.5), size: 20),
+        prefixIcon: Icon(icon, color: Colors.white38, size: 20),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none),
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+      ),
+    );
+  }
+
+  Widget _buildToggle(String label, bool value, Function(bool) onChanged) {
+    return FilterChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: value,
+      onSelected: onChanged,
+      selectedColor: const Color(0xFF6B48FF).withValues(alpha: 0.2),
+      checkmarkColor: const Color(0xFF6B48FF),
+      backgroundColor: Colors.white.withValues(alpha: 0.05),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+
+  Widget _buildThemeDropdown() {
+    return Theme(
+      data: Theme.of(context).copyWith(canvasColor: const Color(0xFF1A1A1A)),
+      child: DropdownButtonFormField<ClassroomTheme>(
+        initialValue: _theme,
+        decoration: InputDecoration(
+          labelText: 'UI Theme',
+          prefixIcon:
+              const Icon(Icons.palette, color: Colors.white38, size: 20),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none),
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: 0.05),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF6B48FF), width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        items: ClassroomTheme.values.map((t) {
+          return DropdownMenuItem(value: t, child: Text(t.name.toUpperCase()));
+        }).toList(),
+        onChanged: (v) => setState(() => _theme = v!),
       ),
     );
   }
 }
 
-/*
- * Animated snackbar that slides in from the top.
- * Automatically dismisses after 3 seconds.
- */
 class _AnimatedSnackBar extends StatefulWidget {
   final String message;
   final bool isError;
   final VoidCallback onDismiss;
 
-  const _AnimatedSnackBar({
-    required this.message,
-    required this.isError,
-    required this.onDismiss,
-  });
+  const _AnimatedSnackBar(
+      {required this.message, required this.isError, required this.onDismiss});
 
   @override
   State<_AnimatedSnackBar> createState() => _AnimatedSnackBarState();
@@ -308,27 +432,20 @@ class _AnimatedSnackBar extends StatefulWidget {
 class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _opacity;
   late Animation<Offset> _slide;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
+        duration: const Duration(milliseconds: 300), vsync: this);
+    _slide =
+        Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
-    _opacity = Tween<double>(begin: 0, end: 1).animate(_controller);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-
     _controller.forward();
     Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        _controller.reverse().then((_) => widget.onDismiss());
-      }
+      if (mounted) _controller.reverse().then((_) => widget.onDismiss());
     });
   }
 
@@ -346,40 +463,28 @@ class _AnimatedSnackBarState extends State<_AnimatedSnackBar>
       right: 16,
       child: SlideTransition(
         position: _slide,
-        child: FadeTransition(
-          opacity: _opacity,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: widget.isError ? Colors.red.shade700 : const Color(0xFF6B48FF),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: (widget.isError ? Colors.red : const Color(0xFF6B48FF))
-                        .withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    widget.isError ? Icons.error_outline : Icons.check_circle_outline,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.message,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: widget.isError
+                  ? Colors.red.shade900
+                  : const Color(0xFF6B48FF),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(color: Colors.black54, blurRadius: 10)
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(widget.isError ? Icons.error : Icons.check_circle,
+                    color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(widget.message,
+                        style: const TextStyle(color: Colors.white))),
+              ],
             ),
           ),
         ),

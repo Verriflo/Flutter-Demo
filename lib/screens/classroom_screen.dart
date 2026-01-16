@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:verriflo_classroom/verriflo_classroom.dart';
 
 import '../widgets/classroom_tabs.dart';
@@ -9,36 +10,35 @@ import '../widgets/classroom_tabs.dart';
  * 
  * Main viewing area for live class content using the Verriflo SDK.
  * Features:
+ * - Session sharing (Room ID & Org ID)
  * - Adaptive layout (portrait/landscape)
- * - Fullscreen mode with system UI hiding
- * - Event handling for class ended, kicked, etc.
- * - Chat/Polls overlay in fullscreen mode
- * 
- * The VerrifloPlayer widget handles all video streaming via WebView.
+ * - Event handling (ended, kicked, etc.)
  */
 class ClassroomScreen extends StatefulWidget {
-  final String token;
+  final String iframeUrl;
+  final String roomId;
+  final String orgId;
 
-  const ClassroomScreen({super.key, required this.token});
+  const ClassroomScreen({
+    super.key,
+    required this.iframeUrl,
+    required this.roomId,
+    required this.orgId,
+  });
 
   @override
   State<ClassroomScreen> createState() => _ClassroomScreenState();
 }
 
 class _ClassroomScreenState extends State<ClassroomScreen> {
-  // Preserve player state across layout changes
   final GlobalKey _playerKey = GlobalKey();
 
   bool _isFullscreen = false;
   bool _showChatOverlay = false;
 
-  /*
-   * Toggle fullscreen mode.
-   * Hides system UI and locks to landscape orientation.
-   */
   void _toggleFullscreen() {
     setState(() => _isFullscreen = !_isFullscreen);
-    
+
     if (_isFullscreen) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       SystemChrome.setPreferredOrientations([
@@ -56,50 +56,43 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
     setState(() => _showChatOverlay = !_showChatOverlay);
   }
 
-  /*
-   * Handle SDK events for logging and UI feedback.
-   * Critical events (class ended, kicked) are handled via convenience callbacks.
-   */
-  void _handleEvent(VerrifloEvent event) {
-    debugPrint('[Classroom] Event: ${event.type} - ${event.message ?? event.reason ?? ''}');
+  void _handleShare() {
+    final String message = '''
+Join my Verriflo Classroom! 🚀
 
-    // Track participant activity for demo purposes
-    if (event.type == VerrifloEventType.participantJoined) {
-      debugPrint('[Classroom] ${event.participantName} joined');
-    }
-    if (event.type == VerrifloEventType.participantLeft) {
-      debugPrint('[Classroom] ${event.participantName} left');
-    }
+📍 Room ID: ${widget.roomId}
+🏢 Org ID: ${widget.orgId}
+
+Jump in here: ${widget.iframeUrl}
+''';
+
+    Share.share(message, subject: 'Invite to Verriflo Classroom');
+  }
+
+  void _handleEvent(VerrifloEvent event) {
+    debugPrint(
+        '[Classroom] Event: ${event.type} - ${event.message ?? event.reason ?? ''}');
   }
 
   void _handleStateChanged(ClassroomState state) {
     debugPrint('[Classroom] State: $state');
   }
 
-  /*
-   * Handle class ended - show confirmation and navigate back.
-   */
   void _handleClassEnded() {
     if (!mounted) return;
+    if (_isFullscreen) _toggleFullscreen();
 
-    // Exit fullscreen if active
-    if (_isFullscreen) {
-      _toggleFullscreen();
-    }
-
-    // Wait briefly then show dialog
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF2A2A2A),
-          title: const Text('Class Ended', style: TextStyle(color: Colors.white)),
-          content: const Text(
-            'The instructor has ended this session.',
-            style: TextStyle(color: Colors.white70),
-          ),
+          backgroundColor: const Color(0xFF1A1A1A),
+          title:
+              const Text('Class Ended', style: TextStyle(color: Colors.white)),
+          content: const Text('The instructor has ended this session.',
+              style: TextStyle(color: Colors.white70)),
           actions: [
             TextButton(
               onPressed: () {
@@ -114,15 +107,9 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
     });
   }
 
-  /*
-   * Handle being kicked from classroom.
-   */
   void _handleKicked(String? reason) {
     if (!mounted) return;
-
-    if (_isFullscreen) {
-      _toggleFullscreen();
-    }
+    if (_isFullscreen) _toggleFullscreen();
 
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted) return;
@@ -130,18 +117,10 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF2A2A2A),
-          title: const Row(
-            children: [
-              Icon(Icons.block, color: Colors.redAccent),
-              SizedBox(width: 8),
-              Text('Removed', style: TextStyle(color: Colors.white)),
-            ],
-          ),
-          content: Text(
-            reason ?? 'You have been removed from this classroom.',
-            style: const TextStyle(color: Colors.white70),
-          ),
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Removed', style: TextStyle(color: Colors.white)),
+          content: Text(reason ?? 'You have been removed from this classroom.',
+              style: const TextStyle(color: Colors.white70)),
           actions: [
             TextButton(
               onPressed: () {
@@ -162,7 +141,6 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
 
   @override
   void dispose() {
-    // Reset orientation lock on exit
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -173,9 +151,7 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
     return PopScope(
       canPop: !_isFullscreen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _isFullscreen) {
-          _toggleFullscreen();
-        }
+        if (!didPop && _isFullscreen) _toggleFullscreen();
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -188,68 +164,74 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
     );
   }
 
-  Widget _buildAdaptiveLayout(BuildContext context, BoxConstraints constraints) {
+  Widget _buildAdaptiveLayout(
+      BuildContext context, BoxConstraints constraints) {
     final isPortrait = constraints.maxHeight > constraints.maxWidth;
     final screenWidth = constraints.maxWidth;
     final screenHeight = constraints.maxHeight;
     final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
 
-    // Calculate player and content dimensions
     double playerTop, playerLeft, playerWidth, playerHeight;
-    double contentTop, contentLeft, contentWidth, contentHeight;
+    double infoTop, infoHeight; // For the share section
+    double contentTop, contentHeight;
 
     if (_isFullscreen) {
-      // Fullscreen covers entire screen
       playerTop = 0;
       playerLeft = 0;
       playerWidth = screenWidth;
       playerHeight = screenHeight;
-      contentWidth = 0;
-      contentHeight = 0;
+      infoTop = 0;
+      infoHeight = 0;
       contentTop = 0;
-      contentLeft = 0;
+      contentHeight = 0;
     } else if (isPortrait) {
-      // Portrait: video on top, content below
       playerLeft = 0;
       playerTop = topPadding;
       playerWidth = screenWidth;
+      playerHeight = screenWidth * (9 / 16);
 
-      final ratioHeight = screenWidth * (9 / 16);
-      final maxHeight = (screenHeight - topPadding) * 0.45;
-      playerHeight = ratioHeight > maxHeight ? maxHeight : ratioHeight;
+      infoTop = playerTop + playerHeight;
+      infoHeight = 60;
 
-      contentLeft = 0;
-      contentTop = playerTop + playerHeight;
-      contentWidth = screenWidth;
+      contentTop = infoTop + infoHeight;
       contentHeight = screenHeight - contentTop;
     } else {
-      // Landscape: video on left, content sidebar on right
       playerTop = topPadding;
       playerLeft = 0;
       playerHeight = screenHeight - topPadding;
-
       final sidebarWidth = screenWidth * 0.4 < 350 ? screenWidth * 0.4 : 350.0;
       playerWidth = screenWidth - sidebarWidth;
 
-      contentLeft = playerWidth;
+      infoTop = 0;
+      infoHeight = 0; // Hide info bar in landscape to save space
       contentTop = topPadding;
-      contentWidth = sidebarWidth;
       contentHeight = playerHeight;
     }
 
     return Stack(
       children: [
-        // Content area (chat/polls) - behind video in portrait
-        if (!_isFullscreen)
+        if (!_isFullscreen) ...[
+          // Content
           Positioned(
             top: contentTop,
-            left: contentLeft,
-            width: contentWidth,
+            left: isPortrait ? 0 : playerWidth,
+            width: isPortrait ? screenWidth : (screenWidth - playerWidth),
             height: contentHeight,
             child: const ClassroomTabs(),
           ),
 
-        // Video player with animated position
+          // Share bar (Portrait only)
+          if (isPortrait)
+            Positioned(
+              top: infoTop,
+              left: 0,
+              width: screenWidth,
+              height: infoHeight,
+              child: _buildShareBar(),
+            ),
+        ],
+
+        // Video Player
         AnimatedPositioned(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -259,7 +241,7 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
           height: playerHeight,
           child: VerrifloPlayer(
             key: _playerKey,
-            token: widget.token,
+            iframeUrl: widget.iframeUrl,
             backgroundColor: Colors.black,
             isFullscreen: _isFullscreen,
             onFullscreenToggle: _toggleFullscreen,
@@ -272,7 +254,7 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
           ),
         ),
 
-        // App bar (hidden in fullscreen)
+        // App Bar
         if (!_isFullscreen)
           Positioned(
             top: 0,
@@ -281,59 +263,98 @@ class _ClassroomScreenState extends State<ClassroomScreen> {
             height: topPadding,
             child: AppBar(
               title: const Text('Live Session'),
-              backgroundColor: Colors.black.withValues(alpha: 0.8),
+              backgroundColor: Colors.black,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new, size: 20),
                 onPressed: () => Navigator.pop(context),
               ),
+              actions: [
+                if (!isPortrait) // Show share in appbar for landscape
+                  IconButton(
+                    icon: const Icon(Icons.share, size: 20),
+                    onPressed: _handleShare,
+                  ),
+              ],
             ),
           ),
 
-        // Fullscreen chat overlay (slide from right)
         if (_isFullscreen && _showChatOverlay)
           Positioned(
             top: 0,
             right: 0,
             bottom: 0,
             width: isPortrait ? screenWidth * 0.8 : 350,
-            child: _buildChatOverlay(isPortrait),
+            child: _buildChatOverlay(),
           ),
       ],
     );
   }
 
-  Widget _buildChatOverlay(bool isPortrait) {
+  Widget _buildShareBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1A1A),
+        border: Border(bottom: BorderSide(color: Colors.white10)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Room: ${widget.roomId}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold)),
+                Text('Org: ${widget.orgId}',
+                    style:
+                        const TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: _handleShare,
+            icon: const Icon(Icons.share, size: 16),
+            label: const Text('Invite'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6B48FF),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatOverlay() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.9),
-        boxShadow: const [BoxShadow(blurRadius: 20, color: Colors.black)],
+        color: Colors.black.withValues(alpha: 0.95),
         border: const Border(left: BorderSide(color: Colors.white10)),
       ),
       child: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Chat & Polls',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
+                  const Text('Chat & Polls',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                   IconButton(
-                    onPressed: _toggleChatOverlay,
-                    icon: const Icon(Icons.close, color: Colors.white),
-                  ),
+                      onPressed: _toggleChatOverlay,
+                      icon: const Icon(Icons.close, color: Colors.white)),
                 ],
               ),
             ),
-            const Divider(height: 1, color: Colors.white10),
             const Expanded(child: ClassroomTabs()),
           ],
         ),

@@ -1,87 +1,109 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:verriflo_classroom/verriflo_classroom.dart';
 
 /*
  * API Service
  * 
  * Handles all network communication with the Verriflo API.
- * Currently supports joining classrooms via the SDK join endpoint.
+ * Uses the VerrifloClient from the SDK for standardized communication.
  */
 class ApiService {
   /*
-   * Join a classroom and retrieve the streaming URL.
-   * 
-   * Makes a POST request to /v1/live/sdk/join with organization context.
-   * Returns JoinResult with either a join URL on success or error message.
-   * 
-   * Parameters:
-   * - apiUrl: Base API URL (e.g., https://api.verriflo.com)
-   * - orgId: Organization identifier from dashboard
-   * - roomId: Classroom room identifier
-   * - name: Display name for the participant
-   * - email: Participant email (used as identity)
+   * Initialize a Verriflo client for the given organization.
+   */
+  static VerrifloClient _getClient(String apiUrl, String orgId) {
+    return VerrifloClient(
+      baseUrl: apiUrl,
+      organizationId: orgId,
+      debug: true, // Enable for demo clarity
+    );
+  }
+
+  /*
+   * Join an existing classroom room.
    */
   static Future<JoinResult> joinClassroom({
     required String apiUrl,
     required String orgId,
     required String roomId,
     required String name,
-    required String email,
+    required String uid,
+    Customization customization = const Customization(),
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$apiUrl/v1/live/sdk/join'),
-        headers: {
-          'Content-Type': 'application/json',
-          'VF-ORG-ID': orgId,
-        },
-        body: jsonEncode({
-          'roomId': roomId,
-          'name': name,
-          'email': email,
-        }),
+      final client = _getClient(apiUrl, orgId);
+      final response = await client.joinRoom(
+        roomId,
+        JoinRoomRequest(
+          participant: Participant(
+            uid: uid,
+            name: name,
+            role: ParticipantRole.student,
+          ),
+          customization: customization,
+        ),
       );
 
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode != 200) {
-        // Extract error message from response
-        final message = data['message'] ?? 'Request failed (${response.statusCode})';
-        return JoinResult.error(message);
-      }
-
-      // Extract token
-      final token = data['data']?['streamToken'];
-      if (token == null) {
-        return JoinResult.error('Invalid response: missing token');
-      }
-
-      return JoinResult.success(token);
-    } on FormatException {
-      return JoinResult.error('Invalid response format');
+      return JoinResult.success(response.iframeUrl);
+    } on VerrifloException catch (e) {
+      return JoinResult.error(e.message);
     } catch (e) {
-      return JoinResult.error('Network error: ${e.toString()}');
+      return JoinResult.error('Connection error: $e');
+    }
+  }
+
+  /*
+   * Create a new classroom room and join as a teacher.
+   */
+  static Future<JoinResult> createClassroom({
+    required String apiUrl,
+    required String orgId,
+    required String roomId,
+    required String title,
+    required String name,
+    required String uid,
+    Customization customization = const Customization(),
+  }) async {
+    try {
+      final client = _getClient(apiUrl, orgId);
+      final response = await client.createRoom(
+        CreateRoomRequest(
+          roomId: roomId,
+          title: title,
+          participant: Participant(
+            uid: uid,
+            name: name,
+            role: ParticipantRole.teacher,
+          ),
+          customization: customization,
+        ),
+      );
+
+      return JoinResult.success(response.iframeUrl);
+    } on VerrifloException catch (e) {
+      return JoinResult.error(e.message);
+    } catch (e) {
+      return JoinResult.error('Connection error: $e');
     }
   }
 }
 
 /*
- * Result wrapper for join operation.
- * Either contains a successful join URL or an error message.
+ * Result wrapper for classroom operations.
+ * Either contains a successful iframe URL or an error message.
  */
 class JoinResult {
   final bool success;
-  final String? token;
+  final String? iframeUrl;
   final String? error;
 
   JoinResult._({
     required this.success,
-    this.token,
+    this.iframeUrl,
     this.error,
   });
 
-  factory JoinResult.success(String token) {
-    return JoinResult._(success: true, token: token);
+  factory JoinResult.success(String iframeUrl) {
+    return JoinResult._(success: true, iframeUrl: iframeUrl);
   }
 
   factory JoinResult.error(String message) {
